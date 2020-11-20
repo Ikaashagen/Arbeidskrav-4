@@ -1,0 +1,333 @@
+---
+title: "Arbeidskrav 4.."
+author: "Ingvild Kåshagen"
+date: "11/19/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Arbeidskrav 4
+
+
+## Del 1
+
+### Bakgrunn
+I denne delen av opppgaven skal vi se på . Vårt spørsmål er da "Hvilken intensitet bør anbefales når det kommer til styrkeutvikling?" Vi skal her ta for oss et datasett som sammenligner 10 reps og 30 reps.
+
+### Statistiske metoder og resultater
+
+#### Laste ned pakker
+
+```{r, echo=FALSE, message = FALSE} 
+
+library(tidyverse)
+library(readxl)
+library(lme4)
+library(emmeans)
+library(pbkrtest)
+library(lmerTest)
+library(kableExtra)
+library(cowplot)
+
+```
+
+
+#### Laste inn data
+Her plasserer vi også tidsvariabler riktig for plotting, og ordner grupperinger slik at 30 RM kommer først. 
+```{r}
+data <- read_excel("ten_vs_thirty.xlsx", na = "NA") %>%
+  filter(exercise == "legpress") %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post")), 
+         group = factor(group,  levels = c("RM30", "RM10"))) %>%
+  print()
+```
+
+
+#### Gjennomsnitt pr gruppe med konfidensintervall
+```{r}
+
+est %>%
+  data.frame() %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+
+  ggplot(aes(timepoint, emmean, group = group, color = group)) + 
+  
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), 
+                position = position_dodge(width = 0.2), 
+                width = 0.1) +
+  geom_line(position = position_dodge(width = 0.2)) +
+  geom_point(position = position_dodge(width = 0.2)) +
+  
+  theme_minimal() 
+
+
+```
+
+#### Figur 1
+Her ser vi gjennomsnittet for gruppe 10 RM og 30 RM. Vi kan her se at gruppene har en relativt lik økning fra tidspunkt pre til mid, deretter øker gruppen med 10 RM mer enn 30RM gruppen fra mid til post test.
+
+
+#### Individuelle resultater og gjennomsnitt med konfidensintervall
+
+```{r}
+est %>%
+  data.frame() %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+
+  ggplot(aes(timepoint, emmean, group = group, color = group) ) + 
+  
+  # Adds raw data
+  geom_line(data = data, aes(timepoint, load, group = subject, color = group), 
+            # Add transparency to individual lines
+            alpha = 0.4) +
+  
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), 
+                position = position_dodge(width = 0.2), 
+                width = 0.1) +
+  geom_line(position = position_dodge(width = 0.2)) +
+  geom_point(position = position_dodge(width = 0.2)) +
+  theme_minimal()
+```
+Figur 2 viser figur 1 sammen med linjene for hvert enkelt subjekt. Her ser vi at tendensene til gjennomsnittet følger tendensen for gruppen.
+
+#### Inferens omkring 10 vs 30 reps
+#### Konfidensintervall
+```{r}
+# Lagre konfidensintervall
+conf_intervals <- confint(m1)
+```
+#### Regresjonskoeffisienter
+```{r}
+
+# Lagre regresjonskoeffisienter
+coefs <- summary(m1)$coef
+
+# Bruke cbind (column bind) for å kombinere tabellene over
+coef_summary <- cbind(coefs, data.frame(conf_intervals)[3:8, ]) 
+
+# Printe tabell
+
+coef_summary %>%
+  kable()
+
+
+
+```
+#### Tabell 1
+#### Plotte resultater fra tabell 1
+
+```{r}
+
+coef_summary %>%
+  mutate(coef = rownames(.)) %>%
+  # filtrere interaksjonvariabler
+  filter(coef %in% c("timepointmid:groupRM10", "timepointpost:groupRM10")) %>%
+  # Lage "timepoint" variabel for å representere "data" data sett
+  mutate(timepoint = gsub("timepoint", "", coef), 
+         timepoint = gsub(":groupRM10", "", timepoint)) %>%
+  #  legge til rad så timepoint = pre er representert 
+  add_row(timepoint = "pre", coef = "pre") %>%
+  # Endre rekkefølge tidspunkt
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+  
+  # Plotte
+  ggplot(aes(timepoint, Estimate)) + 
+  
+  
+  # Lage 0- linje geom_hline (horisontal linje)
+  geom_hline(yintercept = 0, lty = 2) +
+  
+  geom_errorbar(aes(ymin = X2.5.., ymax = X97.5..), width = 0.1) +
+  geom_point(shape = 24, size = 3, fill = "white") +
+  theme_minimal()
+
+
+```
+
+#### Fiugr 3 . 
+Her ser vi gjennomsnittlig resultat for hver av gruppene ved de ulike tidspunktene. 10 reps ser ut til å være høyere enn 30 reps
+```{r}
+
+## Figur 1: Estimerer gjennomsnitt og raw data
+
+figA <- est %>%
+  data.frame() %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+
+  ggplot(aes(timepoint, emmean, group = group, color = group) ) + 
+  
+  # Legger til raw data
+  geom_line(data = data, aes(timepoint, load, group = subject, color = group), 
+            # legger til gjennomsniktighet for linjer
+            alpha = 0.4) +
+  
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), 
+                position = position_dodge(width = 0.2), 
+                width = 0.1) +
+  geom_line(position = position_dodge(width = 0.2)) +
+  geom_point(position = position_dodge(width = 0.2)) +
+  theme_minimal() +
+  
+  # Endrer titler 
+  labs(y = "Legpress 1RM load (kg)", 
+       color = "Intensity") + 
+  
+  # Fjerner tekst og indikatorer på x- aksen siden disse kan bli representert i den andre plottingen. 
+  theme(axis.text.x = element_blank(), 
+        axis.title.x = element_blank())
+  
+# Figure B: Forskjeller mellom grupper ( 95% konfidensintervall)
+
+figB <- coef_summary %>%
+  mutate(coef = rownames(.)) %>%
+  # Filtrerer  bare interaksjonsvariabler
+  filter(coef %in% c("timepointmid:groupRM10", "timepointpost:groupRM10")) %>%
+  # Lager  "timepoint" variabel for å representere "data" data set.
+  mutate(timepoint = gsub("timepoint", "", coef), 
+         timepoint = gsub(":groupRM10", "", timepoint)) %>%
+  # Legger til rad så "timepoint= pre er representert
+  add_row(timepoint = "pre", coef = "pre") %>%
+  # Endrer rekkefølge variabler
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+  
+  # Plotter
+  ggplot(aes(timepoint, Estimate)) + 
+  
+  
+  # Legger til horisontal linje, 0-linje
+  geom_hline(yintercept = 0, lty = 2) +
+  
+  geom_errorbar(aes(ymin = X2.5.., ymax = X97.5..), width = 0.1) +
+  geom_point(shape = 24, size = 3, fill = "white") +
+  theme_minimal() + 
+  
+    # Endrer titler 
+  labs(y = "Average group differences\n(kg, 95% CI)", 
+       color = "Intensity") 
+  
+# Legger til  cowplot til begge figurene i figur 1 
+library(cowplot)
+
+# Plotter grid med figA og figB
+plot_grid(figA, figB, ncol = 1, 
+          # Jevner ut linjer så x-akser matcher
+          align = "v", 
+          
+          axis = "lr")
+
+```
+Figur 4
+Viser et sammendrag av figur 1,2 og 3. 
+
+#### Sammendrag figur 4
+
+```{r}
+summary(m1)
+
+```
+Sammendraget av tabellen viser at standardavviket gjennomsnittlig er 68,85kg pr gruppe. 
+
+```{r}
+# Lage modell som ikke inneholder interaksjonen Fit a model not containing the interaction
+m0 <- lmer(load ~ timepoint + group + (1|subject), data = data)
+
+
+# Lage modell som inneholder interaksjon
+m1 <- lmer(load ~ timepoint * group + (1|subject), data = data)
+
+# Sammenligne modeller ved å bruke anova  funksjonen
+
+anova(m0, m1)
+```
+#### Tolkning tabell
+Her ser vi en modell som sammenligner modellene. AIC er et mål på "beste fit", her er en lav verdi bedre enn høy. LogLik er verdien testet i en Chi2 test og  p-verdien indikerer om modellen varierer mer enn forventet av  sampling error. Vi kan lese at sammenligningen av modeller at det er relativt usannsynlig å se denne forskjellen hvis modellene beskrev dataene likt. Det vil si at å legge til interaksjon mellom data øker m1s evne til å forklare dataene, og det er økt bevis for at det finnes interaksjonseffekt i dataene.
+
+
+### Diskusjon
+I metode og resultatdelen har vi nå sett på flere ulike figurer og plot for å sammenligne 10 reps med 30 reps. Figur 4 viser et sammendrag av modellene. Vi ser her en todelt figur som viser model estimate og estimerte gjennomsnittsforskjeller mellom 10 reps og 30 reps. Vi ser her at 10 reps gir bedre fremgang enn 30 reps. 
+
+
+
+
+
+##DEL 2
+I denne delen av oppgaven skal vi bruke datasettet strengthtests.csv og se på spørsmålet "Hva burde det anbefalte volumet (ett eller tre sett) for styrkeutvikling være?
+
+
+### Metode - statistiske analyser
+
+#### Hente datasett 
+```{r}
+change.data <- read_csv("strengthTests.csv") %>% 
+        pivot_wider(names_from = timepoint, 
+                    values_from = load) %>%
+          mutate(change = (post-pre) / pre * 100) %>%
+  group_by(sex) %>%
+  mutate(pre = pre - mean(pre)) %>%
+  filter(exercise == "isom") 
+
+
+# Ordinær lineær modell lm
+m1 <- lm(change ~ group, data = change.data)
+
+#  Anova
+m2 <- lm(change ~ pre + group, data = change.data)
+```
+
+```{r}
+library(knitr); library(broom)
+
+tidy(m1) %>%
+  kable(col.names = c("Parameter", "Estimate", "SE", "t-statistic", "P-value"), 
+        caption = "The ordinary linear model", digits = c(NA, 2, 2, 2, 3)) 
+```
+#### Tabell
+```{r}
+tidy(m2) %>%
+  kable(col.names = c("Parameter", "Estimate", "SE", "t-statistic", "P-value"), 
+        caption = "The ANCOVA model", digits = c(NA, 2, 2, 2, 3))
+```
+#### Gruppeeffekt
+
+```{r}
+data.frame(model = c("Linear-model", "ANCOVA"), 
+           lower.CI = c(confint(m1)[2], confint(m2)[3]), 
+           upper.CI = c(confint(m1)[4], confint(m2)[6])) %>%
+  kable(col.names = c("Model", "Lower CI", "Upper CI"))
+```
+
+### hjeelp
+
+```{r}
+# Store the data set 
+
+# Load data
+change.data <- read_csv("strengthTests.csv") %>% 
+  # Pivot to a wide format for change calculation
+        pivot_wider(names_from = timepoint, 
+                    values_from = load) %>% 
+  # Calculate the change
+          mutate(change = (post-pre) / pre * 100) %>%
+  # Mean center pre-variable with grouping on sex
+  group_by(sex) %>%
+  mutate(pre = pre - mean(pre)) %>%
+  # Only use the isok.120 data
+  filter(exercise == "isok.120") 
+
+
+
+# Create the model
+m1 <- lm(change ~ pre + group, data = change.data)
+
+# Get confidence intervals
+confint(m1)[c(3, 6)]
+
+# Interpretation of the model 
+summary(m1)
+
+# The average %-change of the single-set group was ~5.6%-point lower than the multiple-set group. This effect was not significant on the 5% level. 
+```
+
