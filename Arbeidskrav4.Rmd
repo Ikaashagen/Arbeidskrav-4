@@ -1,0 +1,486 @@
+---
+title: "Arbeidskrav 4, Del 1 - Repeated measures studies"
+author: "Magnus Kleiven"
+date: "16 11 2020"
+output: html_document
+---
+
+Load libaries necessary for the assignment.
+```{r, echo=FALSE, include=FALSE}
+library(tidyverse);library(readxl); library(lme4); library(emmeans); library(kableExtra); library(broom); library(knitr)
+```
+
+
+# Background
+
+Part 1 of this assignment with help of data set "Ten vs Thirty" try and answer on witch intensity is recommended for increasing muscle strength. The data set compares two groups that trains differently. One group trains with 10 repitions and another with 30 repitions. The exercise that is looked for comparison is legpress. I will look at the results from time-points; "pre", "mid" and "post". To visualize the difference between the groups, I will be using mixed models witch will estimate the mean of various time-points.
+
+# Study design
+
+This study is a randomized study performed with two experiment groups, that looked the effect of training with 10RM or 30RM to improve 1RM. All participants gave informed consent before conducting the study.
+
+
+# Subjects
+
+Subjects in this study are former strength athletes, all women in the age of 30-45 yrs. All participants have competed actively on an international level. We started with 31 participants but only 24 completed the study.
+
+
+# The intervention
+
+The subjects were randomly splitted into two groups, where one group trained with 3 set x 10RM and the other trained 3 set x 30RM. Common for both was they were suppose to do 3 full body sessions a week for 10 weeks. The subjects performed pre-test before starting the intervention and performed a post-test after. The exercises that were tested was benchpress, bicepcurl and legpress.
+
+
+# Data analysis
+
+Obtained data was analyzed and interpreted by using R and R-studio. The significance level was set to p<0.05%. The data was used to make mixed models for visualization of the results of the intervantion. Since the data is taken from a randomized experimental group, using mixed models will allow us to comapre the data of each individual subject with their own starting point(intercept). Mixed models compare the two groups and estimate the increase in resistance (kg) over the three times. The data from mixed models are further used to present the results graphically.
+
+
+# Results
+The results we can interpret from Table 1 show us an estimate for the groups at the three test times. _Intercept_ in the table represents the pre-test results of the 30RM group and becomes the starting point for the result analysis. The estimate for _timepointmid_ shows how much the 30RM group has increased on average from pre- to mid-test, while _timepointpost_ shows how much the 30RM group has increased from pre- to post-test. The estimate for _groupRM10_ shows the difference between the 10RM group and the 30RM group at pre-test. _timepointmid:group10RM_ shows how much the 10RM group has increased compared to the 30RM group from pre- to mid-test. Mathematically, this is calculated by adding _(intercept)_ with _timepointmid_, and then adding _timepointmid:group10_. The result of this will give _timepointmid:group10_ and this can be compared to _timepointmid_. _timepointmid:group10_ will similarly give us the estimate of the difference between the 10RM group and the 30RM group from pre-to post-test. The results from Table 1 are presented graphically in the figure. The upper part of the figure shows the average change, as well as confidence intervals, in the two groups at the three different test times. The lower part of the figure shows the average difference between the groups in mid- and post-test.
+
+Load packages necessary for the assignment
+```{r, echo=FALSE, include=FALSE}
+
+dat <- read_excel("ten_vs_thirty.xlsx", na = "NA") %>%
+  filter(exercise == "legpress", !is.na("load")) %>% #fix the time factor in the right order for plotting and fix the grouping so that the 30RM group come first (comparing to 30RM)
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post")),
+         group = factor(group, levels = c("RM30", "RM10")))
+
+```
+
+
+# Method
+
+## Make a plot
+
+To begin with, I'll be making a simple boxplot to show that there is a difference between the groups at the differente test times. The plot is messy, so by adding _geom_boxplot_ function we'll get a bette picture of how things change over time between the groups.
+```{r, echo=FALSE}
+dat %>%
+  ggplot(aes(timepoint, load, group = subject, color = group)
+) + geom_line() + geom_boxplot(aes(group = NULL), width = 0.5) + theme_minimal()
+                   
+```
+
+
+## Resiudal model to see tif theres anything out of order
+
+```{r, echo=FALSE}
+
+# The lmer function from the lme4 package.
+m1 <- lmer(load ~ timepoint * group + (1|subject), data = dat)
+
+plot(m1)
+```
+
+
+## Make an estimate
+
+We'll use the _emmeans_ function to make an estimate of the model that compare the two groups. In the function ggplot we specify that the groups seperates and has there own color so the model is easier to be interpreted.
+```{r, echo=FALSE}
+
+est <- emmeans(m1, specs = ~ timepoint|group)
+est %>%
+  data.frame() %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+  ggplot(aes(timepoint, emmean, group = group, color = group)) + geom_line() + theme_minimal()
+
+```
+
+
+
+## Add errorbars
+
+By using _position_dodge_ in _geom_errobar_, _geom_line_ and _geom_point_ functions. Will the errobars be removed from each other based on groupings which will make the model look nicer.
+```{r,echo=FALSE, include=FALSE}
+est %>%
+  data.frame() %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+
+  ggplot(aes(timepoint, emmean, group = group, color = group)) + 
+  
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), 
+                position = position_dodge(width = 0.2), 
+                width = 0.1) +
+  geom_line(position = position_dodge(width = 0.2)) +
+  geom_point(position = position_dodge(width = 0.2)) +
+  
+  theme_minimal()
+
+```
+
+
+## Adding raw data into the model
+
+By using _geom_line_ we are ading raw data we produced earlier in our estimation model from previous step. Having this raw data in the same model we are getting a clearer picture that both models uses the same data and that ther is a correlation between them. This confirms so far that we have done things right.
+```{r,echo=FALSE, warning=FALSE, include=FALSE}
+est %>%
+  data.frame() %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+
+  ggplot(aes(timepoint, emmean, group = group, color = group) ) + 
+  # Adds raw data
+  geom_line(data = dat, aes(timepoint, load, group = subject, color = group), 
+            # Add transparency to individual lines
+            alpha = 0.4) +
+  
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), 
+                position = position_dodge(width = 0.2), 
+                width = 0.1) +
+  geom_line(position = position_dodge(width = 0.2)) +
+  geom_point(position = position_dodge(width = 0.2)) +
+  theme_minimal()
+```
+
+
+## Find coefficients
+
+To answer our question of which intensity that gives best results, we'll be looking at interaction coefficients from the model. We take a short cut using "m1" that we stored from before and use _confint_ on it. We make regression coefficients before using _cbind_ function to put these data sets together in a table. We get this table by the function kabel().
+
+```{r,echo=FALSE, message=FALSE}
+
+# Save the confidence intervals
+conf_intervals <- confint(m1)
+
+# Save the regression coefficients
+coefs <- summary(m1)$coef
+
+# Using cbind (column bind) to combine the two data frames
+coef_summary <- cbind(coefs, data.frame(conf_intervals)[3:8, ]) 
+
+# Print the table in a pretty format
+
+coef_summary %>%
+  kable(col.names = c("Estimate", "Std. Error", "T-value", "2.5% CI", "97.5% CI"), digits = c(4,4,4,4,4), caption = "Table 1") %>%
+  kable_classic()
+```
+
+
+## Estimated difference between groups
+
+Since we have gotten 2.5% CI and 97.5% CI for each group in the table, we can now make a model that shows the differnce between the groups at the time "mid" and "post". We only pick the estimate _timepointmid:group10RM_ and _timepointpost:group10RM_ using filter() function. Purpose of this model is to obtain an estimate of the difference between G10RM and G30RM at "mid" and "post" test.
+```{r, echo=FALSE, warning=FALSE}
+coef_summary %>%
+  mutate(coef = rownames(.)) %>%
+  # Filter only the interaction variables
+  filter(coef %in% c("timepointmid:groupRM10", "timepointpost:groupRM10")) %>%
+  # Make a "timepoint" variable to represent the "dat" data set.
+  mutate(timepoint = gsub("timepoint", "", coef), 
+         timepoint = gsub(":groupRM10", "", timepoint)) %>%
+  # Adds a row so that timepoint = "pre" is represented
+  add_row(timepoint = "pre", coef = "pre") %>%
+  # Fix order of the time variable
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+  
+  # Create the plot
+  ggplot(aes(timepoint, Estimate)) + 
+  
+  
+  # Add a line indicating zero geom_hline (horizontal line)
+  geom_hline(yintercept = 0, lty = 2) +
+  
+  geom_errorbar(aes(ymin = X2.5.., ymax = X97.5..), width = 0.1) +
+  geom_point(shape = 24, size = 3, fill = "white") +
+  theme_minimal()
+```
+
+
+# Combining plots to see a wider picture of the results. Using _cowplot_ and _plot_grid_.
+```{r, echo=FALSE, warning=FALSE}
+figA <- est %>%
+  data.frame() %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+
+  ggplot(aes(timepoint, emmean, group = group, color = group) ) + 
+  
+  # Adds raw data
+  geom_line(data = dat, aes(timepoint, load, group = subject, color = group), 
+            # Add transparency to individual lines
+            alpha = 0.4) +
+  
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), 
+                position = position_dodge(width = 0.2), 
+                width = 0.1) +
+  geom_line(position = position_dodge(width = 0.2)) +
+  geom_point(position = position_dodge(width = 0.2)) +
+  theme_minimal() +
+  
+  # Changing axis titles and title in the legend
+  labs(y = "Legpress 1RM load (kg)", 
+       color = "Intensity") + 
+  
+  # Removing text and indicators on the x-axis as these can be represented in the 
+  # other plot
+  theme(axis.text.x = element_blank(), 
+        axis.title.x = element_blank())
+  
+# Figure B: Differences between groups (interaction terms with 95% CI)
+
+figB <- coef_summary %>%
+  mutate(coef = rownames(.)) %>%
+  # Filter only the interaction variables
+  filter(coef %in% c("timepointmid:groupRM10", "timepointpost:groupRM10")) %>%
+  # Make a "timepoint" variable to represent the "dat" data set.
+  mutate(timepoint = gsub("timepoint", "", coef), 
+         timepoint = gsub(":groupRM10", "", timepoint)) %>%
+  # Adds a row so that timepoint = "pre" is represented
+  add_row(timepoint = "pre", coef = "pre") %>%
+  # Fix order of the time variable
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+  
+  # Create the plot
+  ggplot(aes(timepoint, Estimate)) + 
+  
+  
+  # Add a line indicating zero geom_hline (horizontal line)
+  geom_hline(yintercept = 0, lty = 2) +
+  
+  geom_errorbar(aes(ymin = X2.5.., ymax = X97.5..), width = 0.1) +
+  geom_point(shape = 24, size = 3, fill = "white") +
+  theme_minimal() + 
+  
+    # Changing axis titles and title in the legend
+  labs(y = "Average group differences\n(kg, 95% CI)", 
+       color = "Intensity") 
+  
+# Using cowplot to plot both figures in 1
+library(cowplot)
+
+# Plot grid using figA and figB
+plot_grid(figA, figB, ncol = 1, 
+          # Align vertically so that the x axis matches
+          align = "v", 
+          # Set alignment so that axis align both on the left (l) and right (r)
+          # axis
+          axis = "lr")
+
+```
+*It shows model estimates and shows estimaed mean difference between training conditions.*
+
+
+# See what we have fitted in the model.
+```{r echo=FALSE, include=FALSE, message=FALSE, warning=FALSE}
+summary(m1)
+```
+```{r}
+# Fit a model not containing the interaction
+m0 <- lmer(load ~ timepoint + group + (1|subject), data = dat)
+
+
+# Fit a model containing the interaction term
+m1 <- lmer(load ~ timepoint * group + (1|subject), data = dat)
+
+# Compare the models using the anova function
+
+anova(m0, m1)
+```
+
+
+## Results
+
+Performing 10 repetitions seems to be better intensity for 1RM then 30 repetitons.
+
+## Conclusions
+
+In this study both groups increased somewhat in strength. This can show that traning with 30 reps is just as good as 10 reps, but when traning for 1RM - 10 reps is more supirior then 30 reps.
+
+
+Refrences: R-codes:
+
+```{r, echo=TRUE, include=FALSE}
+
+dat <- read_excel("ten_vs_thirty.xlsx", na = "NA") %>%
+  filter(exercise == "legpress", !is.na("load")) %>% #fix the time factor in the right order for plotting and fix the grouping so that the 30RM group come first (comparing to 30RM)
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post")),
+         group = factor(group, levels = c("RM30", "RM10")))
+
+```
+
+```{r, echo=TRUE, include=FALSE}
+dat %>%
+  ggplot(aes(timepoint, load, group = subject, color = group)
+) + geom_line() + geom_boxplot(aes(group = NULL), width = 0.5) + theme_minimal()
+                   
+```
+
+```{r, echo=TRUE, include=FALSE}
+
+# The lmer function from the lme4 package.
+m1 <- lmer(load ~ timepoint * group + (1|subject), data = dat)
+
+plot(m1)
+```
+
+```{r, echo=TRUE, include=FALSE}
+
+est <- emmeans(m1, specs = ~ timepoint|group)
+est %>%
+  data.frame() %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+  ggplot(aes(timepoint, emmean, group = group, color = group)) + geom_line() + theme_minimal()
+
+```
+
+```{r, echo=TRUE, include=FALSE}
+est %>%
+  data.frame() %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+
+  ggplot(aes(timepoint, emmean, group = group, color = group)) + 
+  
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), 
+                position = position_dodge(width = 0.2), 
+                width = 0.1) +
+  geom_line(position = position_dodge(width = 0.2)) +
+  geom_point(position = position_dodge(width = 0.2)) +
+  
+  theme_minimal()
+
+```
+
+
+```{r, echo=TRUE, include=FALSE}
+est %>%
+  data.frame() %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+
+  ggplot(aes(timepoint, emmean, group = group, color = group) ) + 
+  # Adds raw data
+  geom_line(data = dat, aes(timepoint, load, group = subject, color = group), 
+            # Add transparency to individual lines
+            alpha = 0.4) +
+  
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), 
+                position = position_dodge(width = 0.2), 
+                width = 0.1) +
+  geom_line(position = position_dodge(width = 0.2)) +
+  geom_point(position = position_dodge(width = 0.2)) +
+  theme_minimal()
+```
+
+```{r, echo=TRUE, include=FALSE}
+
+# Save the confidence intervals
+conf_intervals <- confint(m1)
+
+# Save the regression coefficients
+coefs <- summary(m1)$coef
+
+# Using cbind (column bind) to combine the two data frames
+coef_summary <- cbind(coefs, data.frame(conf_intervals)[3:8, ]) 
+
+# Print the table in a pretty format
+
+coef_summary %>%
+  kable(col.names = c("Estimate", "Std. Error", "T-value", "2.5% CI", "97.5% CI"), digits = c(4,4,4,4,4), caption = "Table 1") %>%
+  kable_classic()
+```
+
+```{r, echo=TRUE, include=FALSE}
+coef_summary %>%
+  mutate(coef = rownames(.)) %>%
+  # Filter only the interaction variables
+  filter(coef %in% c("timepointmid:groupRM10", "timepointpost:groupRM10")) %>%
+  # Make a "timepoint" variable to represent the "dat" data set.
+  mutate(timepoint = gsub("timepoint", "", coef), 
+         timepoint = gsub(":groupRM10", "", timepoint)) %>%
+  # Adds a row so that timepoint = "pre" is represented
+  add_row(timepoint = "pre", coef = "pre") %>%
+  # Fix order of the time variable
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+  
+  # Create the plot
+  ggplot(aes(timepoint, Estimate)) + 
+  
+  
+  # Add a line indicating zero geom_hline (horizontal line)
+  geom_hline(yintercept = 0, lty = 2) +
+  
+  geom_errorbar(aes(ymin = X2.5.., ymax = X97.5..), width = 0.1) +
+  geom_point(shape = 24, size = 3, fill = "white") +
+  theme_minimal()
+```
+
+```{r, echo=TRUE, include=FALSE}
+figA <- est %>%
+  data.frame() %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+
+  ggplot(aes(timepoint, emmean, group = group, color = group) ) + 
+  
+  # Adds raw data
+  geom_line(data = dat, aes(timepoint, load, group = subject, color = group), 
+            # Add transparency to individual lines
+            alpha = 0.4) +
+  
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), 
+                position = position_dodge(width = 0.2), 
+                width = 0.1) +
+  geom_line(position = position_dodge(width = 0.2)) +
+  geom_point(position = position_dodge(width = 0.2)) +
+  theme_minimal() +
+  
+  # Changing axis titles and title in the legend
+  labs(y = "Legpress 1RM load (kg)", 
+       color = "Intensity") + 
+  
+  # Removing text and indicators on the x-axis as these can be represented in the 
+  # other plot
+  theme(axis.text.x = element_blank(), 
+        axis.title.x = element_blank())
+  
+# Figure B: Differences between groups (interaction terms with 95% CI)
+
+figB <- coef_summary %>%
+  mutate(coef = rownames(.)) %>%
+  # Filter only the interaction variables
+  filter(coef %in% c("timepointmid:groupRM10", "timepointpost:groupRM10")) %>%
+  # Make a "timepoint" variable to represent the "dat" data set.
+  mutate(timepoint = gsub("timepoint", "", coef), 
+         timepoint = gsub(":groupRM10", "", timepoint)) %>%
+  # Adds a row so that timepoint = "pre" is represented
+  add_row(timepoint = "pre", coef = "pre") %>%
+  # Fix order of the time variable
+  mutate(timepoint = factor(timepoint, levels = c("pre", "mid", "post"))) %>%
+  
+  # Create the plot
+  ggplot(aes(timepoint, Estimate)) + 
+  
+  
+  # Add a line indicating zero geom_hline (horizontal line)
+  geom_hline(yintercept = 0, lty = 2) +
+  
+  geom_errorbar(aes(ymin = X2.5.., ymax = X97.5..), width = 0.1) +
+  geom_point(shape = 24, size = 3, fill = "white") +
+  theme_minimal() + 
+  
+    # Changing axis titles and title in the legend
+  labs(y = "Average group differences\n(kg, 95% CI)", 
+       color = "Intensity") 
+  
+# Using cowplot to plot both figures in 1
+library(cowplot)
+
+# Plot grid using figA and figB
+plot_grid(figA, figB, ncol = 1, 
+          # Align vertically so that the x axis matches
+          align = "v", 
+          # Set alignment so that axis align both on the left (l) and right (r)
+          # axis
+          axis = "lr")
+
+```
+
+```{r, echo=TRUE, include=FALSE}
+summary(m1)
+```
+```{r}
+# Fit a model not containing the interaction
+m0 <- lmer(load ~ timepoint + group + (1|subject), data = dat)
+
+
+# Fit a model containing the interaction term
+m1 <- lmer(load ~ timepoint * group + (1|subject), data = dat)
+
+# Compare the models using the anova function
+
+anova(m0, m1)

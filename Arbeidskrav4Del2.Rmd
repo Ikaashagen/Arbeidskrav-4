@@ -1,0 +1,118 @@
+---
+title: "Arbeidskrav 4, Del 2 - Repeated measures studies"
+author: "Magnus Kleiven"
+date: "18 11 2020"
+output: html_document
+---
+
+
+
+## Part 2 - What should be the recommended volume (one or three sets) for strength development?
+
+## Backround
+
+## Method
+
+
+
+
+
+## Result
+
+## Discussion
+
+
+
+Load libaries necessary for the assignment
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse) # Tidyverse includes many other functions 
+library(readxl) # Needed for reading excel files
+library(lme4)
+library(emmeans)
+library(kableExtra)
+library(knitr)
+library(broom)
+library(readr)
+library(tidyr)
+library(pbkrtest)
+library(cowplot)
+```
+
+
+
+Load file that is necessary for the assignment and arrange data set as we want.
+```{r, echo=FALSE}
+
+dat1 <- read_csv("strengthTests.csv") %>% 
+  filter(exercise == "isok.60") %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "session1", "post"))) %>% print()
+```
+
+
+
+```{r, echo=FALSE}
+dat1 %>%
+  ggplot(aes(timepoint, load, group = subject, color = group)) +
+  geom_line() +
+  geom_boxplot(aes(group = NULL), width = 0.5) +
+  theme_minimal()
+
+```
+
+```{r}
+
+lmer2 <- lmer(load ~ timepoint * group + (1|subject), data = dat1)
+
+summary(lmer2)
+```
+
+```{r}
+
+plot(lmer2)
+```
+
+```{r}
+est1 <- emmeans(lmer2, specs = ~ timepoint|group)
+
+est1 %>%
+  data.frame() %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "session1", "post"))) %>%
+  ggplot(aes(timepoint, emmean, group = group, color = group)) + geom_line() +
+  theme_minimal()
+
+```
+
+```{r, echo=FALSE}
+est1 %>%
+  data.frame() %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "session1", "post"))) %>%
+  ggplot(aes(timepoint, emmean, group = group, color = group)) + 
+  geom_line(data = dat1, aes(timepoint, load, group = subject, color = group), alpha = 0.4) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL),
+                position = position_dodge(width = 0.2),
+                width = 0.1) + 
+  geom_line(position = position_dodge(width = 0.2)) +
+  geom_point(position = position_dodge(width = 0.2)) +
+  theme_minimal()
+                
+```
+
+```{r, echo=FALSE}
+conf_intervals2 <- confint(lmer2)
+```
+
+```{r, echo=FALSE}
+coefs2 <- summary(lmer2)$coef
+
+coef_summary2 <- cbind(coefs2, data.frame(conf_intervals2)[3:8, ] )
+```
+
+
+```{r, echo=FALSE}
+coef_summary2 %>%
+  kable(col.names = c("Estimate", "Std. error", "T-verdi", "CI 2,5%", "CI, 95%"),
+        digits = c(1, 2, 0, 2, 4)) %>%
+  kable_classic()
+
+```
+
