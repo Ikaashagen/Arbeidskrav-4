@@ -227,6 +227,7 @@ Viser et sammendrag av figur 1,2 og 3.
 ```{r}
 summary(m1)
 
+
 ```
 Sammendraget av tabellen viser at standardavviket gjennomsnittlig er 68,85kg pr gruppe. 
 
